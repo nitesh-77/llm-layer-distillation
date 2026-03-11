@@ -4,7 +4,7 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![PyTorch](https://img.shields.io/badge/framework-PyTorch-orange)
 
-## 📌 Project Overview
+##  Project Overview
 LLM-Layer-Distillation is an experimental repository focused on two critical areas of LLM optimization: architectural distillation and grounded dataset generation.
 
 This project uses layer-level knowledge distillation to replace expensive self-attention layers with sub-quadratic Hyena operators (fftconv). Target model activations serve as a cheap supervision signal to train the efficient sequence mixer.
