@@ -48,7 +48,7 @@ Each run directory contains the trained Hyena checkpoint, compact activation sam
 - `hyena.safetensors` and `hyena_config.json` contain the Hyena weights and constructor settings.
 - `activations.safetensors` contains sample token IDs, captured attention inputs and outputs, and Hyena predictions. `activation_metadata.json` maps tensors to source articles, chunks, token lengths, and split names.
 - `metrics.json` reports held-out MSE, RMSE, relative L2 error, cosine similarity, zero-output and training-mean baselines, and teacher-versus-replacement next-token loss.
-- `metadata.json` records the model and data revisions, hidden width, target block, source IDs, split membership, run settings, and runtime versions.
+- `metadata.json` records the model and data revisions, hidden width, target block, source IDs, split membership, runtime versions, and effective AdamW parameter-group settings. The CLI learning rate applies to parameters without a Hyena-specific rate; the filter and positional embedding rates are recorded separately.
 - `loss_curve.png` plots minibatch training loss and validation loss.
 - `baseline_metrics.png` compares held-out MSE for Hyena, zero output, and the training mean.
 - `comparison_median.png` and `comparison_worst.png` show the teacher output, Hyena output, and their difference for deterministic held-out examples.

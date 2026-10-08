@@ -77,6 +77,7 @@ class _TrainingRun:
     history: tuple[dict[str, float | int], ...]
     selected_step: int
     best_validation_mse: float
+    optimizer_parameter_groups: tuple[dict[str, Any], ...]
 
 
 TeacherFactory = Callable[[DemoConfig], Teacher]
@@ -322,6 +323,48 @@ def _activation_mse(
     return float((squared_error / max(1, element_count)).item())
 
 
+def _optimizer_parameter_groups(
+    operator: HyenaOperator, config: DemoConfig
+) -> tuple[list[dict[str, Any]], tuple[dict[str, Any], ...]]:
+    grouped: dict[tuple[float, float], dict[str, Any]] = {}
+    for name, parameter in operator.named_parameters():
+        hints = getattr(parameter, "_optim", {})
+        learning_rate = float(hints.get("lr", config.learning_rate))
+        weight_decay = float(
+            config.weight_decay
+            if config.weight_decay
+            else hints.get("weight_decay", 0.0)
+        )
+        key = (learning_rate, weight_decay)
+        group = grouped.setdefault(
+            key,
+            {"params": [], "parameter_names": []},
+        )
+        group["params"].append(parameter)
+        group["parameter_names"].append(name)
+
+    parameter_groups: list[dict[str, Any]] = []
+    metadata: list[dict[str, Any]] = []
+    for (learning_rate, weight_decay), group in grouped.items():
+        parameters = group["params"]
+        parameter_groups.append(
+            {
+                "params": parameters,
+                "lr": learning_rate,
+                "weight_decay": weight_decay,
+            }
+        )
+        metadata.append(
+            {
+                "learning_rate": learning_rate,
+                "weight_decay": weight_decay,
+                "parameter_count": sum(parameter.numel() for parameter in parameters),
+                "parameter_names": group["parameter_names"],
+            }
+        )
+    return parameter_groups, tuple(metadata)
+
+
 def _fit_hyena(
     train: Sequence[ActivationExample],
     validation: Sequence[ActivationExample],
@@ -339,11 +382,10 @@ def _fit_hyena(
         order=config.order,
         filter_order=config.filter_order,
     ).to(device=device, dtype=torch.float32)
-    optimizer = torch.optim.AdamW(
-        operator.parameters(),
-        lr=config.learning_rate,
-        weight_decay=config.weight_decay,
+    optimizer_groups, optimizer_parameter_groups = _optimizer_parameter_groups(
+        operator, config
     )
+    optimizer = torch.optim.AdamW(optimizer_groups)
     grouped: dict[int, list[ActivationExample]] = {}
     for example in train:
         grouped.setdefault(example.attention_input.shape[0], []).append(example)
@@ -407,6 +449,7 @@ def _fit_hyena(
         history=tuple(history),
         selected_step=best_step,
         best_validation_mse=best_validation_mse,
+        optimizer_parameter_groups=optimizer_parameter_groups,
     )
 
 
@@ -995,6 +1038,7 @@ def _write_run(
             "weight_decay": config.weight_decay,
             "optimizer": "AdamW",
             "optimizer_betas": [0.9, 0.999],
+            "optimizer_parameter_groups": list(train_run.optimizer_parameter_groups),
             "order": config.order,
             "filter_order": config.filter_order,
         },

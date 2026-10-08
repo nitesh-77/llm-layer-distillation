@@ -96,7 +96,7 @@ def demo_config(input_path: Path, output_dir: Path) -> DemoConfig:
         max_chunks_per_document=1,
         train_steps=2,
         batch_size=1,
-        learning_rate=1e-3,
+        learning_rate=2e-4,
         filter_order=8,
         seed=17,
     )
@@ -126,6 +126,18 @@ def test_run_demo_captures_trains_saves_and_replaces_one_qwen_attention(
     assert metadata["target"]["layer_ordinal"] == 3
     assert metadata["model"]["hidden_size"] == 16
     assert metadata["model"]["quantization"] == "none (CPU test fixture)"
+    parameter_group_rates = {
+        parameter_name: group["learning_rate"]
+        for group in metadata["settings"]["optimizer_parameter_groups"]
+        for parameter_name in group["parameter_names"]
+    }
+    assert parameter_group_rates["in_proj.weight"] == pytest.approx(2e-4)
+    assert parameter_group_rates["filter_fn.implicit_filter.0.weight"] == pytest.approx(
+        1e-3
+    )
+    assert parameter_group_rates[
+        "filter_fn.position_embedding.embedding"
+    ] == pytest.approx(1e-5)
     assert set(metadata["document_splits"]) == {"train", "validation", "test"}
     split_ids = [
         set(metadata["document_splits"][name])
