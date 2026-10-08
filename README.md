@@ -1,106 +1,92 @@
-# LLM-Layer-Distillation
+# Qwen attention-to-Hyena demo
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://spdx.org/licenses/MIT.html)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![PyTorch](https://img.shields.io/badge/framework-PyTorch-orange)
+This repository runs a bounded implementation demo. It captures one Qwen2.5-7B attention submodule, trains a Hyena operator to predict that submodule's output, and checks one forward-only replacement.
 
-##  Project Overview
-LLM-Layer-Distillation is an experimental repository focused on two critical areas of LLM optimization: architectural distillation and grounded dataset generation.
+The run measures two separate outcomes. Activation metrics show how closely Hyena predicts the captured attention output. Next-token loss shows how one replacement changes Qwen's predictions on the same held-out sequences. The run can report weak or mixed results. It does not require Hyena to win.
 
-This project uses layer-level knowledge distillation to replace expensive self-attention layers with sub-quadratic Hyena operators (fftconv). Target model activations serve as a cheap supervision signal to train the efficient sequence mixer.
+## What the run captures
 
-Key findings:
-* **The Hyena op converges and generalises:** Train loss is ~0.0003, test loss is ~0.00057, with no significant overfitting.
-* **It learns from a tiny dataset:** The layer successfully learns from just 400 samples.
-* **The training is stable:** The loss curve is flat and consistent, not noisy.
+The default target is `model.layers[2].self_attn`, the third decoder block with zero-based indexing. The captured input follows the block's input normalization. The target is the first value returned by `self_attn`, before the residual addition. The run does not capture attention probabilities or replace the full decoder block.
 
-## Why This Project Exists
-Standard transformer attention scales quadratically with sequence length, creating a memory and compute bottleneck for long contexts. This project explores whether that bottleneck can be bypassed cheaply — by training a sub-quadratic Hyena operator to mimic an existing attention layer's behaviour using only its saved input/output activations, without retraining the full model.
+The teacher is frozen Qwen2.5-7B loaded in 4-bit NF4 mode. The Hyena width comes from the teacher configuration. The default sequence limit is 512 tokens. The default run samples 18 source articles and keeps at most one sequence from each article.
 
-## 📊 Attention Visualisation
+When you omit `--input`, the run streams from the English subset of [Wikimedia Wikipedia](https://huggingface.co/datasets/wikimedia/wikipedia/tree/main/20231101.en). It uses dataset revision `ad5752b`, shuffles with seed 17 and a 1,000-article buffer, then assigns whole articles to train, validation, and test before tokenization. The dataset card lists CC-BY-SA-3.0 and GFDL. See the [dataset card](https://huggingface.co/datasets/wikimedia/wikipedia) for its provenance and terms. The stream does not download the full corpus. The Hugging Face [streaming guide](https://huggingface.co/docs/datasets/stream) describes the seeded shuffle used by this run.
 
-The image below shows attention maps over a 4,096-token context window. The near-uniform distribution across all positions illustrates the challenge standard attention faces with long documents — the signal is spread thin, making it hard for the model to attend to specific evidence.
+The old Q&A generation and prompt-formatting notebooks are not part of this workflow. They remain under `legacy/notebooks/` as historical prototypes. The old `attention.png` is also preserved under `legacy/`; it is not a result from this run.
 
-![comparison of the attention outputs from the original and hyena op](attention.png)
+## Run the demo on Lightning AI
 
-This motivates the use of the Hyena operator, whose implicit convolutional filters can capture sparse, long-range dependencies more efficiently.
-
-## Project Structure
-
-```
-.
-├── data_download.ipynb     # Download Wikipedia & generate Q/A pairs via GPT-3.5-turbo
-├── finetune_gen.ipynb      # Format training data with CONTEXT IDs and HIGHLIGHT tags
-├── hyena.ipynb             # Hyena operator implementation (FFT conv, filters, HyenaOperator)
-├── train_data.json         # Generated training pairs (context chunk + Q/A)
-├── QA_pairs.json           # Raw Q/A pairs with article IDs and chunk indices
-└── README.md
-```
-
----
-## Getting Started
-
-### Prerequisites
-
-- Python 3.10+
-- PyTorch
-- **Ollama** installed locally (with a model like `mistral` or `llama3` pulled)
-- A Hugging Face account with access to `Qwen/Qwen2.5-7B`
-
-### Installation
+Start a Lightning AI Studio with a T4 GPU. Install the project and its Hugging Face dependencies.
 
 ```bash
-git clone https://github.com/nitesh-77/llm-layer-distillation.git
-pip install torch transformers datasets openai einops
+python -m pip install -e ".[demo]"
 ```
 
-### Step 1 — Generate Training Data
+Run the default bounded experiment. Use a new output directory for each run.
 
-Open `data_download.ipynb`. This notebook:
-
-1. Downloads the English Wikipedia dataset (6.4M articles) via Hugging Face `datasets`
-2. Splits each article into 2,000-character chunks
-3. Calls a local state-of-the-art LLM (e.g., Llama 3 or Mistral via Ollama) to generate a specific, searchable Q/A pair for each chunk
-4. Saves results incrementally to `QA_pairs.json`
-
-
-> **Note:** The full Wikipedia dataset is large (~20GB). For quick experimentation, limit the loop in Cell 5 to the first few hundred articles.
-
-### Step 2 — Format Fine-Tuning Batches
-
-Open `finetune_gen.ipynb`. This notebook:
-
-1. Loads the saved `train_data.json`
-2. Tokenizes data using the `Qwen/Qwen2.5-7B` tokenizer
-3. Formats batches with randomised `[CONTEXT <ID>]` blocks and citation instructions
-
-The prompt format trains the model to answer questions and cite its source with `[HIGHLIGHT]` tags:
-
-```
-[CONTEXT 74821]
-<wikipedia passage>
-[/CONTEXT 74821]
-
-Answer the following questions, providing highlighted text as evidence for your answer.
-To cite and highlight, first link the [CONTEXT] block, then add [HIGHLIGHT] tags around the relevant text.
+```bash
+python -m hyena_distill \
+  --output runs/qwen-layer-2-demo \
+  --max-documents 18 \
+  --max-length 512 \
+  --steps 25 \
+  --batch-size 1
 ```
 
-### Step 3 — The Hyena Operator
+The command saves the resolved model revision, dataset revision, split membership, token counts, optimizer settings, and package versions. It releases Qwen after capture, fits Hyena, then reloads the same model revision to compare the original and replaced model.
 
-`hyena.ipynb` contains a standalone implementation of the Hyena sequence model layer. Key components:
+## Verification status
 
-| Component | Description |
-|---|---|
-| `fftconv` | FFT-based long convolution kernel |
-| `PositionalEmbedding` | Complex exponential positional encoding |
-| `ExponentialModulation` | Learnable decay applied to the filter |
-| `HyenaFilter` | Implicit MLP-parameterised long filter |
-| `HyenaOperator` | Full Hyena layer replacing multi-head attention |
+The CPU integration suite runs a tiny local Qwen2 model and checks the workflow without downloading model weights. It does not exercise Qwen2.5-7B or a T4. No real-model result is included yet. A completed run writes a verdict and embeds its figures in the run directory's `README.md`; use that report for measured claims.
 
-The Hyena operator can be dropped in as a replacement for attention in any transformer-style architecture.
+You can pass a local JSONL file with `--input path/to/articles.jsonl`. Each line must contain a unique `source_id` and non-empty `text`. `title` and `url` are optional. The workflow still assigns complete source documents to splits before it chunks their tokens.
 
----
+## Read the results
+
+Each run directory contains the trained Hyena checkpoint, compact activation sample, metrics, metadata, plots, and draft Hugging Face cards.
+
+- `hyena.safetensors` and `hyena_config.json` contain the Hyena weights and constructor settings.
+- `activations.safetensors` contains sample token IDs, captured attention inputs and outputs, and Hyena predictions. `activation_metadata.json` maps tensors to source articles, chunks, token lengths, and split names.
+- `metrics.json` reports held-out MSE, RMSE, relative L2 error, cosine similarity, zero-output and training-mean baselines, and teacher-versus-replacement next-token loss.
+- `metadata.json` records the model and data revisions, hidden width, target block, source IDs, split membership, run settings, and runtime versions.
+- `loss_curve.png` plots minibatch training loss and validation loss.
+- `baseline_metrics.png` compares held-out MSE for Hyena, zero output, and the training mean.
+- `comparison_median.png` and `comparison_worst.png` show the teacher output, Hyena output, and their difference for deterministic held-out examples.
+- `model_card.md` and `dataset_card.md` are drafts for separate Hugging Face repositories.
+- `complete.json` appears only after the run writes the full artifact directory.
+
+The zero-output baseline predicts a zero attention contribution. The training-mean baseline predicts the per-channel mean of training targets. The run computes each baseline from the declared split and reports target scale beside the error metrics. A positive next-token loss delta means the Hyena replacement increased loss on this sample.
+
+Validation MSE selects the checkpoint. The run scores the final test split after selection and does not pass test captures to the optimizer or checkpoint selector.
+
+The activation sample stores tensors as float16 to reduce disk use. Hyena training converts each batch to float32. The checkpoint contains Hyena weights only. The run never saves Qwen teacher weights or uploads files to Hugging Face.
+
+## Run the CPU integration test
+
+Install the test extra, then run the suite.
+
+```bash
+python -m pip install -e ".[test]"
+python -m pytest
+```
+
+The integration test builds a tiny local Qwen2 model. It checks the capture boundary, document-disjoint splits, training and checkpoint reload, activation and loss artifacts, and the attention replacement. It does not prove Qwen2.5-7B loading, T4 memory fit, or model fidelity. Run the documented experiment on a Lightning T4 before claiming those results.
+
+## What this demo does not establish
+
+The run covers one attention submodule, a small document sample, and a forward pass with the cache disabled. It does not measure full-model perplexity, multi-layer replacement, generation behavior, latency, throughput, or a general quality guarantee.
+
+The previous README reported train loss near `0.0003` and test loss near `0.00057`. The repository does not contain the teacher-capture code or activation tensors needed to reproduce those values. Treat them as unverified historical claims. The current run writes its own measurements and preserves poor cases in the report.
 
 ## License
 
-MIT
+The repository code uses the MIT License in `LICENSE`. Public activation samples must follow the source dataset's terms, listed in each generated dataset card.
+
+## Project files
+
+```text
+src/hyena_distill/      Runnable capture, training, evaluation, and artifact code
+tests/                  CPU integration and Hyena behavior tests
+legacy/notebooks/       Historical data, prompt-formatting, and Hyena notebooks
+legacy/attention.png    Unverified historical figure
+```
