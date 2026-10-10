@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "qwen-hyena-demo"
+version = "0.1.0"
+description = "A bounded demo that trains Hyena to approximate one Qwen attention submodule."
+readme = "README.md"
+requires-python = ">=3.10,<3.13"
+dependencies = [
+    "einops>=0.8,<1",
+    "matplotlib>=3.8,<4",
+    "safetensors>=0.4,<1",
+    "torch>=2.4,<3",
+]
+
+[project.optional-dependencies]
+demo = [
+    "accelerate>=1.2,<2",
+    "bitsandbytes>=0.45,<1",
+    "datasets>=3.2,<5",
+    "transformers>=4.51,<5",
+]
+demo-bf16 = [
+    "accelerate>=1.2,<2",
+    "datasets>=3.2,<5",
+    "transformers>=4.51,<5",
+]
+test = [
+    "datasets>=3.2,<5",
+    "pytest>=8,<10",
+    "transformers>=4.51,<5",
+]
+
+[project.scripts]
+hyena-distill = "hyena_distill.cli:main"
+hyena-distill-compare = "hyena_distill.compare:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+pythonpath = ["src"]
