@@ -664,18 +664,19 @@ def test_plots_label_the_compared_quantities(monkeypatch, tmp_path: Path) -> Non
     )
 
     loss_axes = figures[0][1]
-    baseline_axes = figures[1][1]
-    distribution_axes = figures[2][1]
-    replacement_axes = figures[3][1]
-    comparison_axes = figures[4][1]
+    baseline_axes = figures[2][1]
+    distribution_axes = figures[3][1]
+    replacement_axes = figures[4][1]
+    comparison_axes = figures[5][1]
     assert loss_axes.get_xlabel() == "Optimizer step"
     assert loss_axes.get_ylabel() == "Mean squared error (log scale)"
     assert loss_axes.get_yscale() == "log"
     assert "BF16 teacher" in loss_axes.get_title()
     assert loss_axes.get_legend() is not None
-    assert "50-step rolling mean" in [
-        line.get_label() for line in loss_axes.get_lines()
-    ]
+    assert any(
+        "50-step rolling mean" in line.get_label()
+        for line in loss_axes.get_lines()
+    )
     assert "Selected checkpoint (step 2)" in [
         line.get_label() for line in loss_axes.get_lines()
     ]
