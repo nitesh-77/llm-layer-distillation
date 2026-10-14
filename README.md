@@ -1,128 +1,63 @@
-# LLM-Layer-Distillation
+# LLM layer distillation
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://spdx.org/licenses/MIT.html)
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![PyTorch](https://img.shields.io/badge/framework-PyTorch-orange)
+[![Weights on Hugging Face](https://img.shields.io/badge/Hugging_Face-Weights-FFD21E?logo=huggingface&logoColor=FFD21E&labelColor=202020)](https://huggingface.co/swoord111/qwen2-5-7b-hyena-attn-replacement-block-2)
 
-**GPU used for the BF16 source run:** AMD Instinct MI300X VF on AMD Developer Cloud. The run used ROCm 10.1 and PyTorch `2.14.0+rocm10.1.0`. The later 400-step tuning record does not identify its GPU.
+Trained on an **AMD Instinct MI300X** using AMD Developer Cloud.
 
-##  Project Overview
-LLM-Layer-Distillation is an experimental repository focused on two critical areas of LLM optimization: architectural distillation and grounded dataset generation.
+Can a small Hyena model learn to do the job of one attention module inside Qwen2.5-7B?
 
-This project uses layer-level knowledge distillation to replace expensive self-attention layers with sub-quadratic Hyena operators (fftconv). Target model activations serve as a cheap supervision signal to train the efficient sequence mixer.
+Attention helps Qwen use earlier words to predict what comes next. I trained Hyena, which uses learned filters, to copy one attention module. Then I put it into Qwen and checked its predictions.
 
-The original notebook reported activation MSE near `0.00057` on its test split after training on 400 samples. Treat that as an earlier experiment. Its score is not directly comparable to the saved-activation results below, which also check what happens to Qwen's next-token loss when Hyena replaces attention.
+## How it works
 
-## Saved-activation tuning results
+1. Run text through Qwen and save the inputs and outputs of one attention module.
+2. Train Hyena on those saved pairs until its outputs get closer to Qwen's.
+3. Replace that attention module with Hyena and compare the model's predictions.
 
-We tuned the Hyena checkpoint for 400 steps on saved BF16 activation recordings. The run used validation MSE to select the checkpoint at step 400. It used learning-rate scale `0.03` and seed `44`, with 358 training, 77 validation, and 77 test sequences.
+Qwen stays frozen. Only attention in the third block, `layers[2]` in code, is replaced.
 
-| Attention-output prediction on the recorded test split | MSE |
-| --- | ---: |
-| Original Hyena checkpoint | 0.00406211 |
-| Tuned Hyena checkpoint | 0.00386767 |
+I used 512 Wikipedia text sequences, with 358 for training, 77 for validation, and 77 for testing.
 
-The tuned checkpoint lowered MSE by 4.79% on the same 77-sequence test split.
+## Training
 
-| Qwen2.5-7B evaluation | Next-token loss | Increase over unmodified Qwen |
+Hyena trained for 3,200 steps. Blue shows training error. Orange shows error on separate validation examples. Lower is better.
+
+![Hyena training error over 3,200 steps](docs/experiments/assets/mi300x-training-curve.png)
+
+The error fell sharply, then improved more slowly. It rose around step 1,600 and recovered. Validation error was lowest at step 3,200.
+
+## Did tuning help?
+
+I continued training the saved Hyena model for another 400 steps with smaller learning rates.
+
+| What I checked | Before tuning | After tuning |
 | --- | ---: | ---: |
-| Unmodified Qwen2.5-7B | 2.05470741 | 0 |
-| Qwen with original Hyena | 2.05611621 | +0.00140880 |
-| Qwen with tuned Hyena | 2.05549194 | +0.00078453 |
+| Error when copying attention, measured as MSE | 0.00406211 | 0.00386767 |
+| Qwen's next-word prediction loss with Hyena | 2.05611621 | 2.05549194 |
 
-The replacement comparison used the same 77 sequences and 12,521 predicted tokens. Tuning reduced the extra loss from the Hyena replacement by 44.31%. The tuned replacement still has slightly higher loss than unmodified Qwen. This measures one attention submodule on a previously exposed test split. It does not measure generation quality or speed.
+Lower is better for both. MSE measures how far Hyena's outputs are from Qwen's attention outputs.
 
-![Validation MSE across three tuning attempts. Lower is better.](docs/experiments/assets/mi300x-validation-curve.svg)
+Hyena's copying error improved by **4.79%**. For the second row, Qwen with its original attention scored **2.05470741**, so the tuned replacement still performed slightly worse.
 
-![Extra next-token loss from replacing attention with the original and tuned Hyena checkpoints.](docs/experiments/assets/mi300x-qwen-replacement-gap.svg)
+![Extra prediction loss caused by the Hyena replacement](docs/experiments/assets/mi300x-qwen-replacement-gap.svg)
 
-## Why This Project Exists
-Standard transformer attention scales quadratically with sequence length, creating a memory and compute bottleneck for long contexts. This project explores whether that bottleneck can be bypassed cheaply — by training a sub-quadratic Hyena operator to mimic an existing attention layer's behaviour using only its saved input/output activations, without retraining the full model.
+Tuning removed **44.31% of the extra prediction loss caused by the replacement**. This is a reduction in the gap to Qwen.
 
-## 📊 Attention Visualisation
+<details>
+<summary>See the three tuning attempts</summary>
 
-The image below shows attention maps over a 4,096-token context window. The near-uniform distribution across all positions illustrates the challenge standard attention faces with long documents — the signal is spread thin, making it hard for the model to attend to specific evidence.
+![Validation error across three tuning attempts](docs/experiments/assets/mi300x-validation-curve.svg)
 
-![comparison of the attention outputs from the original and hyena op](attention.png)
+Each line uses a different learning rate.
 
-This motivates the use of the Hyena operator, whose implicit convolutional filters can capture sparse, long-range dependencies more efficiently.
+</details>
 
-## Project Structure
+## What this result means
 
-```
-.
-├── data_download.ipynb     # Download Wikipedia & generate Q/A pairs via GPT-3.5-turbo
-├── finetune_gen.ipynb      # Format training data with CONTEXT IDs and HIGHLIGHT tags
-├── hyena.ipynb             # Hyena operator implementation (FFT conv, filters, HyenaOperator)
-├── train_data.json         # Generated training pairs (context chunk + Q/A)
-├── QA_pairs.json           # Raw Q/A pairs with article IDs and chunk indices
-└── README.md
-```
+Hyena learned to copy part of Qwen, and tuning made the replacement closer to the original. It has not beaten Qwen's attention.
 
----
-## Getting Started
-
-### Prerequisites
-
-- Python 3.10+
-- PyTorch
-- **Ollama** installed locally (with a model like `mistral` or `llama3` pulled)
-- A Hugging Face account with access to `Qwen/Qwen2.5-7B`
-
-### Installation
-
-```bash
-git clone https://github.com/nitesh-77/llm-layer-distillation.git
-pip install torch transformers datasets openai einops
-```
-
-### Step 1 — Generate Training Data
-
-Open `data_download.ipynb`. This notebook:
-
-1. Downloads the English Wikipedia dataset (6.4M articles) via Hugging Face `datasets`
-2. Splits each article into 2,000-character chunks
-3. Calls a local state-of-the-art LLM (e.g., Llama 3 or Mistral via Ollama) to generate a specific, searchable Q/A pair for each chunk
-4. Saves results incrementally to `QA_pairs.json`
-
-
-> **Note:** The full Wikipedia dataset is large (~20GB). For quick experimentation, limit the loop in Cell 5 to the first few hundred articles.
-
-### Step 2 — Format Fine-Tuning Batches
-
-Open `finetune_gen.ipynb`. This notebook:
-
-1. Loads the saved `train_data.json`
-2. Tokenizes data using the `Qwen/Qwen2.5-7B` tokenizer
-3. Formats batches with randomised `[CONTEXT <ID>]` blocks and citation instructions
-
-The prompt format trains the model to answer questions and cite its source with `[HIGHLIGHT]` tags:
-
-```
-[CONTEXT 74821]
-<wikipedia passage>
-[/CONTEXT 74821]
-
-Answer the following questions, providing highlighted text as evidence for your answer.
-To cite and highlight, first link the [CONTEXT] block, then add [HIGHLIGHT] tags around the relevant text.
-```
-
-### Step 3 — The Hyena Operator
-
-`hyena.ipynb` contains a standalone implementation of the Hyena sequence model layer. Key components:
-
-| Component | Description |
-|---|---|
-| `fftconv` | FFT-based long convolution kernel |
-| `PositionalEmbedding` | Complex exponential positional encoding |
-| `ExponentialModulation` | Learnable decay applied to the filter |
-| `HyenaFilter` | Implicit MLP-parameterised long filter |
-| `HyenaOperator` | Full Hyena layer replacing multi-head attention |
-
-The Hyena operator can be dropped in as a replacement for attention in any transformer-style architecture.
-
----
+The comparison covers 77 sequences and 12,521 word pieces. Follow-up comparisons reused this test set, so the result needs checking on fresh text. Faster responses and better generated answers have not been demonstrated.
 
 ## License
 
-MIT
+[MIT](LICENSE)
