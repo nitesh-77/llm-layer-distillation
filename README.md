@@ -4,15 +4,37 @@
 ![Python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![PyTorch](https://img.shields.io/badge/framework-PyTorch-orange)
 
+**GPU used for the BF16 source run:** AMD Instinct MI300X VF on AMD Developer Cloud. The run used ROCm 10.1 and PyTorch `2.14.0+rocm10.1.0`. The later 400-step tuning record does not identify its GPU.
+
 ##  Project Overview
 LLM-Layer-Distillation is an experimental repository focused on two critical areas of LLM optimization: architectural distillation and grounded dataset generation.
 
 This project uses layer-level knowledge distillation to replace expensive self-attention layers with sub-quadratic Hyena operators (fftconv). Target model activations serve as a cheap supervision signal to train the efficient sequence mixer.
 
-Key findings:
-* **The Hyena op converges and generalises:** Train loss is ~0.0003, test loss is ~0.00057, with no significant overfitting.
-* **It learns from a tiny dataset:** The layer successfully learns from just 400 samples.
-* **The training is stable:** The loss curve is flat and consistent, not noisy.
+The original notebook reported activation MSE near `0.00057` on its test split after training on 400 samples. Treat that as an earlier experiment. Its score is not directly comparable to the saved-activation results below, which also check what happens to Qwen's next-token loss when Hyena replaces attention.
+
+## Saved-activation tuning results
+
+We tuned the Hyena checkpoint for 400 steps on saved BF16 activation recordings. The run used validation MSE to select the checkpoint at step 400. It used learning-rate scale `0.03` and seed `44`, with 358 training, 77 validation, and 77 test sequences.
+
+| Attention-output prediction on the recorded test split | MSE |
+| --- | ---: |
+| Original Hyena checkpoint | 0.00406211 |
+| Tuned Hyena checkpoint | 0.00386767 |
+
+The tuned checkpoint lowered MSE by 4.79% on the same 77-sequence test split.
+
+| Qwen2.5-7B evaluation | Next-token loss | Increase over unmodified Qwen |
+| --- | ---: | ---: |
+| Unmodified Qwen2.5-7B | 2.05470741 | 0 |
+| Qwen with original Hyena | 2.05611621 | +0.00140880 |
+| Qwen with tuned Hyena | 2.05549194 | +0.00078453 |
+
+The replacement comparison used the same 77 sequences and 12,521 predicted tokens. Tuning reduced the extra loss from the Hyena replacement by 44.31%. The tuned replacement still has slightly higher loss than unmodified Qwen. This measures one attention submodule on a previously exposed test split. It does not measure generation quality or speed.
+
+![Validation MSE across three tuning attempts. Lower is better.](docs/experiments/assets/mi300x-validation-curve.svg)
+
+![Extra next-token loss from replacing attention with the original and tuned Hyena checkpoints.](docs/experiments/assets/mi300x-qwen-replacement-gap.svg)
 
 ## Why This Project Exists
 Standard transformer attention scales quadratically with sequence length, creating a memory and compute bottleneck for long contexts. This project explores whether that bottleneck can be bypassed cheaply — by training a sub-quadratic Hyena operator to mimic an existing attention layer's behaviour using only its saved input/output activations, without retraining the full model.

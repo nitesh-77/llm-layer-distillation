@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500" role="img" aria-label="Validation MSE across three Hyena tuning attempts">
+<rect width="900" height="500" fill="white"/>
+<text x="95" y="30" font-family="sans-serif" font-size="20">Hyena tuning on saved Qwen activations</text>
+<line x1="95" y1="400.0" x2="800" y2="400.0" stroke="#e5e7eb"/>
+<text x="83" y="405.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#374151">0.0035</text>
+<line x1="95" y1="313.8" x2="800" y2="313.8" stroke="#e5e7eb"/>
+<text x="83" y="318.8" text-anchor="end" font-family="sans-serif" font-size="13" fill="#374151">0.0039</text>
+<line x1="95" y1="227.5" x2="800" y2="227.5" stroke="#e5e7eb"/>
+<text x="83" y="232.5" text-anchor="end" font-family="sans-serif" font-size="13" fill="#374151">0.0043</text>
+<line x1="95" y1="141.2" x2="800" y2="141.2" stroke="#e5e7eb"/>
+<text x="83" y="146.2" text-anchor="end" font-family="sans-serif" font-size="13" fill="#374151">0.0047</text>
+<line x1="95" y1="55.0" x2="800" y2="55.0" stroke="#e5e7eb"/>
+<text x="83" y="60.0" text-anchor="end" font-family="sans-serif" font-size="13" fill="#374151">0.0051</text>
+<text x="95.0" y="425" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#374151">0</text>
+<text x="271.2" y="425" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#374151">100</text>
+<text x="447.5" y="425" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#374151">200</text>
+<text x="623.8" y="425" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#374151">300</text>
+<text x="800.0" y="425" text-anchor="middle" font-family="sans-serif" font-size="13" fill="#374151">400</text>
+<line x1="95" y1="332.0" x2="800" y2="332.0" stroke="#6b7280" stroke-width="2" stroke-dasharray="6 5"/>
+<polyline points="95.0,332.0 271.2,239.4 447.5,102.7 623.8,346.0 800.0,349.0" fill="none" stroke="#d97706" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="95.0" cy="332.0" r="4" fill="#d97706"/>
+<circle cx="271.2" cy="239.4" r="4" fill="#d97706"/>
+<circle cx="447.5" cy="102.7" r="4" fill="#d97706"/>
+<circle cx="623.8" cy="346.0" r="4" fill="#d97706"/>
+<circle cx="800.0" cy="349.0" r="4" fill="#d97706"/>
+<polyline points="95.0,332.0 271.2,354.7 447.5,21.1 623.8,246.8 800.0,320.7" fill="none" stroke="#2563eb" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="95.0" cy="332.0" r="4" fill="#2563eb"/>
+<circle cx="271.2" cy="354.7" r="4" fill="#2563eb"/>
+<circle cx="447.5" cy="21.1" r="4" fill="#2563eb"/>
+<circle cx="623.8" cy="246.8" r="4" fill="#2563eb"/>
+<circle cx="800.0" cy="320.7" r="4" fill="#2563eb"/>
+<polyline points="95.0,332.0 271.2,354.6 447.5,239.3 623.8,363.1 800.0,369.2" fill="none" stroke="#059669" stroke-width="3" stroke-linejoin="round"/>
+<circle cx="95.0" cy="332.0" r="4" fill="#059669"/>
+<circle cx="271.2" cy="354.6" r="4" fill="#059669"/>
+<circle cx="447.5" cy="239.3" r="4" fill="#059669"/>
+<circle cx="623.8" cy="363.1" r="4" fill="#059669"/>
+<circle cx="800.0" cy="369.2" r="4" fill="#059669"/>
+<text x="448" y="455" text-anchor="middle" font-family="sans-serif" font-size="14">Additional training step</text>
+<text x="95" y="475" font-family="sans-serif" font-size="12" fill="#4b5563">Dashed line: original checkpoint. Lower MSE is better.</text>
+<line x1="640" y1="70" x2="665" y2="70" stroke="#d97706" stroke-width="3"/>
+<text x="673" y="75" font-family="sans-serif" font-size="13">LR scale 0.30</text>
+<line x1="640" y1="92" x2="665" y2="92" stroke="#2563eb" stroke-width="3"/>
+<text x="673" y="97" font-family="sans-serif" font-size="13">LR scale 0.10</text>
+<line x1="640" y1="114" x2="665" y2="114" stroke="#059669" stroke-width="3"/>
+<text x="673" y="119" font-family="sans-serif" font-size="13">LR scale 0.03</text>
+</svg>
